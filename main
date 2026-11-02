@@ -1,0 +1,5 @@
+from planarity_checker import run_planarity 
+
+def main():
+print("=== Algorithm Execution ===")
+run_planarity()

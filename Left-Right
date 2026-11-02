@@ -1,0 +1,133 @@
+import sys
+
+# Augmenter la limite de récursion pour les grands graphes
+sys.setrecursionlimit(10000)
+
+class PlanarityChecker:
+    def __init__(self, num_vertices):
+        self.V = num_vertices
+        self.adj = [[] for _ in range(num_vertices)]
+        self.depth = [-1] * num_vertices
+        self.parent = [-1] * num_vertices
+        self.back_edges = []  # Stocke les arêtes arrière sous forme (descendant, ancêtre)
+        self.time = 0
+
+    def add_edge(self, u, v):
+        self.adj[u].append(v)
+        self.adj[v].append(u)
+
+    # ---------------------------------------------------------
+    # PHASE 1 : DFS pour construire l'arbre et trouver les arêtes arrière
+    # ---------------------------------------------------------
+    def dfs(self, u, p, d):
+        self.depth[u] = d
+        self.parent[u] = p
+        for v in self.adj[u]:
+            if v == p:
+                continue
+            if self.depth[v] == -1:  # Non visité -> arête d'arbre
+                self.dfs(v, u, d + 1)
+            elif self.depth[v] < self.depth[u]:  # Déjà visité et ancêtre -> arête arrière
+                # On l'enregistre une seule fois (du descendant vers l'ancêtre)
+                self.back_edges.append((u, v))
+
+    # ---------------------------------------------------------
+    # PHASE 2 : Test de planarité avec la pile (feuille -> racine)
+    # ---------------------------------------------------------
+    def is_planar(self):
+        # 1. Lancer le DFS depuis le sommet 0 (on suppose le graphe connexe)
+        self.dfs(0, -1, 0)
+
+        # 2. Trier les sommets par profondeur décroissante (feuilles d'abord)
+        vertices_by_depth = sorted(range(self.V), key=lambda x: self.depth[x], reverse=True)
+
+        # 3. Initialiser la pile et le dictionnaire de contraintes
+        # La pile stockera des tuples (descendant, ancêtre)
+        stack = []
+        
+        # constraints stocke le côté assigné à chaque arête arrière : 0 (Gauche) ou 1 (Droite)
+        # Une arête arrière est identifiée par le tuple (descendant, ancêtre)
+        constraints = {}
+
+        # 4. Parcourir les sommets de la feuille vers la racine
+        for v in vertices_by_depth:
+            # Trouver les arêtes arrière qui partent de ce sommet v
+            edges_from_v = [e for e in self.back_edges if e[0] == v]
+            
+            # Trier ces arêtes par profondeur de leur ancêtre (de la plus proche à la plus lointaine)
+            edges_from_v.sort(key=lambda e: self.depth[e[1]])
+
+            for edge in edges_from_v:
+                # --- TEST DE CONFLIT AVANT D'EMPILER ---
+                # On compare la nouvelle arête avec toutes les arêtes actives dans la pile
+                for active_edge in stack:
+                    # Vérifier si les deux arêtes sont imbriquées
+                    # edge = (desc1, anc1), active_edge = (desc2, anc2)
+                    d1, a1 = edge
+                    d2, a2 = active_edge
+                    
+                    # Les profondeurs
+                    dep_d1, dep_a1 = self.depth[d1], self.depth[a1]
+                    dep_d2, dep_a2 = self.depth[d2], self.depth[a2]
+                    
+                    # Condition d'imbrication : a < c < b < d ou c < a < d < b
+                    # (en termes de profondeurs, l'ancêtre a toujours la plus petite profondeur)
+                    is_nested = False
+                    if dep_a1 < dep_a2 < dep_d1 < dep_d2:
+                        is_nested = True
+                    elif dep_a2 < dep_a1 < dep_d2 < dep_d1:
+                        is_nested = True
+                    
+                    # Si elles sont imbriquées, elles DOIVENT être de côtés opposés
+                    if is_nested:
+                        # Si les deux ont déjà une contrainte assignée
+                        if edge in constraints and active_edge in constraints:
+                            if constraints[edge] == constraints[active_edge]:
+                                return False  # CONFLIT : elles sont du même côté !
+                        # Si une seule a une contrainte, on propage l'opposé
+                        elif edge in constraints:
+                            constraints[active_edge] = 1 - constraints[edge]
+                        elif active_edge in constraints:
+                            constraints[edge] = 1 - constraints[active_edge]
+                        else:
+                            # Aucune contrainte encore, on assigne arbitrairement
+                            # (on met la nouvelle arête à 0 et l'ancienne à 1, par exemple)
+                            constraints[edge] = 0
+                            constraints[active_edge] = 1
+                
+                # --- EMPILER LA NOUVELLE ARÊTE ---
+                stack.append(edge)
+
+            # --- DÉPILER LES ARÊTES TERMINÉES ---
+            # Une arête (desc, anc) est terminée si on a atteint son ancêtre 'anc' (ou si on est au-dessus)
+            # On parcourt la pile de haut en bas pour retirer les arêtes dont l'ancêtre est v (ou plus haut)
+            while stack:
+                top_edge = stack[-1]
+                # Si l'ancêtre de l'arête au sommet de la pile est à une profondeur >= celle de v
+                # Cela signifie qu'on a atteint ou dépassé son ancêtre, elle est donc "morte"
+                if self.depth[top_edge[1]] >= self.depth[v]:
+                    stack.pop()
+                else:
+                    break  # La pile est triée par profondeur d'ancêtre croissante, on peut s'arrêter
+
+        return True  # Aucun conflit trouvé, le graphe est planaire
+
+# ---------------------------------------------------------
+# EXEMPLE D'UTILISATION (INPUT)
+# ---------------------------------------------------------
+if __name__ == "__main__":
+    # --- Exemple 1 : K4 (Planaire) ---
+    print("--- Test avec K4 (Planaire) ---")
+    g1 = PlanarityChecker(4)
+    g1.add_edge(0, 1); g1.add_edge(0, 2); g1.add_edge(0, 3)
+    g1.add_edge(1, 2); g1.add_edge(1, 3); g1.add_edge(2, 3)
+    print("Résultat :", "Planaire" if g1.is_planar() else "Non planaire")
+
+    # --- Exemple 2 : K3,3 (Non planaire) ---
+    print("\n--- Test avec K3,3 (Non planaire) ---")
+    g2 = PlanarityChecker(6)
+    # Groupe 1 : 0, 1, 2. Groupe 2 : 3, 4, 5.
+    for i in range(3):
+        for j in range(3, 6):
+            g2.add_edge(i, j)
+    print("Résultat :", "Planaire" if g2.is_planar() else "Non planaire")

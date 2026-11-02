@@ -111,24 +111,24 @@ def read_graphs_from_file(filename="graph.txt"):
             else:
                 i += 1
     except FileNotFoundError:
-        print(f"Erreur : Le fichier '{filename}' n'a pas été trouvé.")
+        print(f"Error: The file '{filename}' was not found.")
         return []
         
     return graphs
 
 def run_planarity():
-    """Fonction principale qui sera appelée par main.py"""
-    print("--- Test de Planarité (Left-Right Algorithm) ---")
-    filename = "graph.txt"
+    """Main function that will be called by main.py"""
+    print("--- Planarity Test (Left-Right Algorithm) ---")
+    filename = "Graph"
     graphs = read_graphs_from_file(filename)
     
     if not graphs:
-        print("Aucun graphe n'a été chargé.")
+        print("No graphs were loaded.")
         return
 
     for idx, graph in enumerate(graphs, start=1):
         result = graph.is_planar()
-        status = "PLANAIRE" if result else "NON PLANAIRE"
-        print(f"Graphe {idx} (V={graph.V}) : {status}")
+        status = "PLANAR" if result else "NON-PLANAR"
+        print(f"Graph {idx} (V={graph.V}) : {status}")
     
     print("------------------------------------------------\n")

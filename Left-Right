@@ -10,7 +10,6 @@ class PlanarityChecker:
         self.depth = [-1] * num_vertices
         self.parent = [-1] * num_vertices
         self.back_edges = []  # Stocke les arêtes arrière sous forme (descendant, ancêtre)
-        self.time = 0
 
     def add_edge(self, u, v):
         self.adj[u].append(v)
@@ -36,17 +35,15 @@ class PlanarityChecker:
     # ---------------------------------------------------------
     def is_planar(self):
         # 1. Lancer le DFS depuis le sommet 0 (on suppose le graphe connexe)
-        self.dfs(0, -1, 0)
+        # Pour gérer les graphes non connexes, on pourrait boucler sur tous les sommets
+        if self.V > 0 and self.depth[0] == -1:
+            self.dfs(0, -1, 0)
 
         # 2. Trier les sommets par profondeur décroissante (feuilles d'abord)
         vertices_by_depth = sorted(range(self.V), key=lambda x: self.depth[x], reverse=True)
 
         # 3. Initialiser la pile et le dictionnaire de contraintes
-        # La pile stockera des tuples (descendant, ancêtre)
         stack = []
-        
-        # constraints stocke le côté assigné à chaque arête arrière : 0 (Gauche) ou 1 (Droite)
-        # Une arête arrière est identifiée par le tuple (descendant, ancêtre)
         constraints = {}
 
         # 4. Parcourir les sommets de la feuille vers la racine
@@ -59,39 +56,29 @@ class PlanarityChecker:
 
             for edge in edges_from_v:
                 # --- TEST DE CONFLIT AVANT D'EMPILER ---
-                # On compare la nouvelle arête avec toutes les arêtes actives dans la pile
                 for active_edge in stack:
-                    # Vérifier si les deux arêtes sont imbriquées
-                    # edge = (desc1, anc1), active_edge = (desc2, anc2)
                     d1, a1 = edge
                     d2, a2 = active_edge
                     
-                    # Les profondeurs
                     dep_d1, dep_a1 = self.depth[d1], self.depth[a1]
                     dep_d2, dep_a2 = self.depth[d2], self.depth[a2]
                     
                     # Condition d'imbrication : a < c < b < d ou c < a < d < b
-                    # (en termes de profondeurs, l'ancêtre a toujours la plus petite profondeur)
                     is_nested = False
                     if dep_a1 < dep_a2 < dep_d1 < dep_d2:
                         is_nested = True
                     elif dep_a2 < dep_a1 < dep_d2 < dep_d1:
                         is_nested = True
                     
-                    # Si elles sont imbriquées, elles DOIVENT être de côtés opposés
                     if is_nested:
-                        # Si les deux ont déjà une contrainte assignée
                         if edge in constraints and active_edge in constraints:
                             if constraints[edge] == constraints[active_edge]:
-                                return False  # CONFLIT : elles sont du même côté !
-                        # Si une seule a une contrainte, on propage l'opposé
+                                return False  # CONFLIT
                         elif edge in constraints:
                             constraints[active_edge] = 1 - constraints[edge]
                         elif active_edge in constraints:
                             constraints[edge] = 1 - constraints[active_edge]
                         else:
-                            # Aucune contrainte encore, on assigne arbitrairement
-                            # (on met la nouvelle arête à 0 et l'ancienne à 1, par exemple)
                             constraints[edge] = 0
                             constraints[active_edge] = 1
                 
@@ -99,35 +86,78 @@ class PlanarityChecker:
                 stack.append(edge)
 
             # --- DÉPILER LES ARÊTES TERMINÉES ---
-            # Une arête (desc, anc) est terminée si on a atteint son ancêtre 'anc' (ou si on est au-dessus)
-            # On parcourt la pile de haut en bas pour retirer les arêtes dont l'ancêtre est v (ou plus haut)
             while stack:
                 top_edge = stack[-1]
                 # Si l'ancêtre de l'arête au sommet de la pile est à une profondeur >= celle de v
-                # Cela signifie qu'on a atteint ou dépassé son ancêtre, elle est donc "morte"
                 if self.depth[top_edge[1]] >= self.depth[v]:
                     stack.pop()
                 else:
-                    break  # La pile est triée par profondeur d'ancêtre croissante, on peut s'arrêter
+                    break
 
-        return True  # Aucun conflit trouvé, le graphe est planaire
+        return True
 
 # ---------------------------------------------------------
-# EXEMPLE D'UTILISATION (INPUT)
+# FONCTION POUR LIRE LE FICHIER GRAPH.TXT
+# ---------------------------------------------------------
+def read_graphs_from_file(filename):
+    graphs = []
+    current_graph = None
+    
+    try:
+        with open(filename, 'r') as f:
+            lines = f.readlines()
+            
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            
+            # Ignorer les commentaires et les lignes vides
+            if not line or line.startswith('#'):
+                i += 1
+                continue
+            
+            # Lire le nombre de sommets et d'arêtes
+            parts = line.split()
+            if len(parts) == 2:
+                V, E = int(parts[0]), int(parts[1])
+                current_graph = PlanarityChecker(V)
+                i += 1
+                
+                # Lire les E arêtes
+                edges_read = 0
+                while edges_read < E and i < len(lines):
+                    edge_line = lines[i].strip()
+                    if not edge_line or edge_line.startswith('#'):
+                        i += 1
+                        continue
+                    
+                    u, v = map(int, edge_line.split())
+                    current_graph.add_edge(u, v)
+                    edges_read += 1
+                    i += 1
+                
+                graphs.append(current_graph)
+            else:
+                i += 1
+                
+    except FileNotFoundError:
+        print(f"Erreur : Le fichier '{filename}' n'a pas été trouvé.")
+        sys.exit(1)
+        
+    return graphs
+
+# ---------------------------------------------------------
+# MAIN : LECTURE DU FICHIER ET EXÉCUTION DES TESTS
 # ---------------------------------------------------------
 if __name__ == "__main__":
-    # --- Exemple 1 : K4 (Planaire) ---
-    print("--- Test avec K4 (Planaire) ---")
-    g1 = PlanarityChecker(4)
-    g1.add_edge(0, 1); g1.add_edge(0, 2); g1.add_edge(0, 3)
-    g1.add_edge(1, 2); g1.add_edge(1, 3); g1.add_edge(2, 3)
-    print("Résultat :", "Planaire" if g1.is_planar() else "Non planaire")
-
-    # --- Exemple 2 : K3,3 (Non planaire) ---
-    print("\n--- Test avec K3,3 (Non planaire) ---")
-    g2 = PlanarityChecker(6)
-    # Groupe 1 : 0, 1, 2. Groupe 2 : 3, 4, 5.
-    for i in range(3):
-        for j in range(3, 6):
-            g2.add_edge(i, j)
-    print("Résultat :", "Planaire" if g2.is_planar() else "Non planaire")
+    filename = "graph.txt"
+    graphs = read_graphs_from_file(filename)
+    
+    print(f"--- Analyse de {len(graphs)} graphe(s) depuis '{filename}' ---\n")
+    
+    for idx, graph in enumerate(graphs, start=1):
+        result = graph.is_planar()
+        status = "PLANAIRE" if result else "NON PLANAIRE"
+        print(f"Graphe {idx} (V={graph.V}) : {status}")
+        
+    print("\n--- Fin des tests ---")
